@@ -6,7 +6,10 @@ import java.io.*;
 public class StringInputStream extends InputStream {
 
     private String src;
+
     int pos;
+
+    int markPoint = 0;
 
     public StringInputStream() {
         this.src = "";
@@ -28,8 +31,18 @@ public class StringInputStream extends InputStream {
     }
 
     @Override
-    public synchronized void reset() throws IOException {
-        this.pos = 0;
+    public synchronized void reset() {
+        this.pos = markPoint;
+    }
+
+    @Override
+    public boolean markSupported() {
+        return true;
+    }
+
+    @Override
+    public synchronized void mark(int readlimit) {
+        markPoint = pos;
     }
 
     public static void main(String[] args) throws IOException {

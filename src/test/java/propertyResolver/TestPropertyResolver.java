@@ -3,6 +3,7 @@ package propertyResolver;
 import fit.wenchao.constants.CommonConstants;
 import fit.wenchao.example.TestProperty;
 import fit.wenchao.propertyResolver.PropertyResolver;
+import fit.wenchao.propertyResolver.PropertyResolvers;
 import fit.wenchao.propertyResolver.ResettableFileInputStream;
 import org.junit.Assert;
 import org.junit.Test;
@@ -16,7 +17,7 @@ public class TestPropertyResolver {
 
     @Test
     public void test_createConf_simple_string_conf() throws InstantiationException, IllegalAccessException, NoSuchFieldException, IOException {
-        TestProperty conf = PropertyResolver.create(TestProperty.class);
+        TestProperty conf = PropertyResolvers.create(TestProperty.class);
         Assert.assertEquals(conf.getEncryptAll(), "true");
         System.out.println(conf.getClasspath());
         System.out.println(conf.getEncryptAll());
@@ -25,7 +26,7 @@ public class TestPropertyResolver {
 
     @Test
     public void test_createConf_nested_object_conf() throws InstantiationException, IllegalAccessException, IOException, NoSuchFieldException {
-        TestProperty conf = PropertyResolver.create(TestProperty.class);
+        TestProperty conf = PropertyResolvers.create(TestProperty.class);
         System.out.println(conf.getSec().getAge());
         System.out.println(conf.getSec().getName());
         System.out.println(conf.getSec().getAdds());
@@ -45,7 +46,7 @@ public class TestPropertyResolver {
 
     @Test
     public void test_createConf_nested_object_list_conf() throws InstantiationException, IllegalAccessException, NoSuchFieldException, IOException {
-        TestProperty conf = PropertyResolver.create(TestProperty.class);
+        TestProperty conf = PropertyResolvers.create(TestProperty.class);
         System.out.println(conf.getSec().getAge());
         System.out.println(conf.getSec().getName());
         System.out.println(conf.getSec().getAdds());
@@ -66,7 +67,7 @@ public class TestPropertyResolver {
 
     @Test
     public void test_createConf_null_object_conf() throws InstantiationException, IllegalAccessException, NoSuchFieldException, IOException {
-        TestProperty conf = PropertyResolver.create(TestProperty.class);
+        TestProperty conf = PropertyResolvers.create(TestProperty.class);
         System.out.println(conf.getSecNull());
     }
 }

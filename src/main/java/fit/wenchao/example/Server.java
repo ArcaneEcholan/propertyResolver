@@ -2,6 +2,7 @@ package fit.wenchao.example;
 
 import fit.wenchao.propertiesProcessor.ConfPrefix;
 import fit.wenchao.propertyResolver.PropertyResolver;
+import fit.wenchao.propertyResolver.PropertyResolvers;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
@@ -28,7 +29,7 @@ public class Server {
     }
 
     public static void main(String[] args) throws IOException {
-        Server server = PropertyResolver.create(Server.class);
+        Server server = PropertyResolvers.create(Server.class);
         System.out.println(server);
     }
 }
