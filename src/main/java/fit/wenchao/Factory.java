@@ -1,11 +1,14 @@
 package fit.wenchao;
 
 import fit.wenchao.propertyResolver.*;
+import fit.wenchao.utils.GenericContext;
+import fit.wenchao.utils.IGenericContext;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Type;
 
 public class Factory {
     public static IPropertyResolver getPropertyResolver() {
@@ -29,5 +32,9 @@ public class Factory {
 
     public static ResettableInputStream getStringResettableInputStreamFromString(String src) throws IOException {
         return new StringResettableInputStream(new StringInputStream(src));
+    }
+
+    public static IGenericContext getGenericContext(Type type){
+        return new GenericContext(type);
     }
 }

@@ -1,16 +1,13 @@
 package fit.wenchao.propertyResolver;
 
 import fit.wenchao.Factory;
-import fit.wenchao.constants.CommonConstants;
 import fit.wenchao.propertiesProcessor.ConfPrefix;
-import fit.wenchao.utils.RegexUtils;
-import fit.wenchao.utils.VarCaseConvertUtils;
+import fit.wenchao.utils.*;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.io.*;
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -56,27 +53,104 @@ public class PropertyResolver implements IPropertyResolver {
     }
 
 
-    public InputStream getConfInput() throws IOException {
-        InputStream inputStream = PropertyResolver.class.getClassLoader().getResourceAsStream(CommonConstants.DEFAULT_CONF_NAME + CommonConstants.PROPERTIES_SUFFIX);
-        System.out.println(PropertyResolver.class.getClassLoader());
-        System.out.println(ClassLoader.getSystemClassLoader());
-        Field in = null;
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-        byte[] buffer = new byte[1024];
-        int len;
-        while ((len = inputStream.read(buffer)) > -1) {
-            baos.write(buffer, 0, len);
-        }
-        baos.flush();
-
-        return new StringInputStream(baos.toString("UTF-8"));
-
-    }
-
     public ResettableInputStream getResettableConfInput() throws IOException {
         return Factory.getStringResettableInputStreamFromResource(DEFAULT_CONF_NAME + PROPERTIES_SUFFIX);
+    }
+
+    public Object processStringField(ResettableInputStream resettableInputStream,
+                                     String fullPropertyName, boolean nestedInList) throws IOException {
+        if (resettableInputStream == null) {
+            throw new IllegalStateException("PropertyStream is empty");
+        }
+
+        if (nestedInList) {
+            List<String> result = new ArrayList<>();
+            BufferedReader propertyIn =
+                    resettableInputStream.getBufferedReader();
+            String line;
+            while ((line = propertyIn.readLine()) != null) {
+                line = line.trim();
+                boolean matches = Pattern.matches("^" + RegexUtils.escape(fullPropertyName) + "\\[.*\\]=.*",
+                        line);
+                if (matches) {
+                    result.add(getLineValue(line));
+                }
+            }
+
+            return result;
+        }
+
+
+        String result = null;
+        BufferedReader propertyIn =
+                resettableInputStream.getBufferedReader();
+        String line;
+        while ((line = propertyIn.readLine()) != null) {
+            line = line.trim();
+            if (line.startsWith(fullPropertyName + "=")) {
+                result = getLineValue(line);
+            }
+        }
+        return result;
+    }
+
+
+    public Object processListWithNotGenericObjectField(ResettableInputStream resettableInputStream,
+                                                       String fullPropertyName,
+                                                       Class<? extends Object> configClass,
+                                                       Field field,
+                                                       String prefix) throws IOException {
+        if (resettableInputStream == null) {
+            throw new IllegalStateException("Property file not found in the classpath: " + DEFAULT_CONF_NAME + PROPERTIES_SUFFIX);
+        }
+
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        BufferedReader propertyIn =
+                resettableInputStream.getBufferedReader();
+        String line;
+        while ((line = propertyIn.readLine()) != null) {
+            line = line.trim();
+            RegexNestListPrefixContext regexNestListPrefixContext =
+                    regexNestListPrefix(line, fullPropertyName);
+            if (regexNestListPrefixContext == null) {
+                continue;
+            }
+            String listId = regexNestListPrefixContext.getId();
+            List<String> groupLines = map.get(listId);
+            if (groupLines == null) {
+                groupLines = new ArrayList<>();
+                map.put(listId, groupLines);
+            }
+
+            groupLines.add(line);
+
+        }
+
+        Map<String, String> groupStringMap = new HashMap<>();
+
+        map.forEach((k, v) -> {
+            String lines = "";
+
+            String listId = k;
+            List<String> groupLines = v;
+            for (String l : groupLines) {
+                lines += l;
+                lines += "\n";
+            }
+            groupStringMap.put(k, lines);
+        });
+
+        Set<String> groupIds = groupStringMap.keySet();
+        List<Object> results = new ArrayList<>();
+
+        for (String groupId : groupIds) {
+            String groupStrings = groupStringMap.get(groupId);
+            Object result = createConf(Factory.getStringResettableInputStreamFromString(groupStrings),
+                    configClass, true, field, prefix, true, groupId);
+            results.add(result);
+        }
+
+        return results;
     }
 
     public <T> T createConf(ResettableInputStream resettableInputStream,
@@ -108,133 +182,53 @@ public class PropertyResolver implements IPropertyResolver {
             prefix = parentPrefix + "." + parentField.getName() + "[" + listElemId + "]";
         }
 
+        // traverse fields of target Class
         for (Field field : fields) {
             field.setAccessible(true);
 
             String fieldName = field.getName();
 
+            // full property name in properties file, e.g. system.config.name
             String fullPropertyName = prefix + "." + fieldName;
 
             Class<?> fieldType = field.getType();
             resettableInputStream.reset();
+            Object result = null;
             if (fieldType.isAssignableFrom(String.class)) {
-                if (resettableInputStream == null) {
-                    throw new IllegalStateException("PropertyStream is empty");
-                }
-                String result = null;
-                BufferedReader propertyIn =
-                        resettableInputStream.getBufferedReader();
-                String line;
-                while ((line = propertyIn.readLine()) != null) {
-                    line = line.trim();
-                    if (line.startsWith(fullPropertyName + "=")) {
-                        result = getLineValue(line);
-                    }
-                }
-                try {
-                    field.set(confInstance, result);
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                }
+                result = processStringField(resettableInputStream, fullPropertyName, false);
+                ReflectUtils.setField(field, confInstance, result);
             } else if (List.class.isAssignableFrom(fieldType)) {
                 Type genericFieldType = field.getGenericType();
-                if (genericFieldType instanceof ParameterizedType) {
-                    Type[] actualTypeArguments = ((ParameterizedType) genericFieldType).getActualTypeArguments();
-                    Type innerType = actualTypeArguments[0];
-                    if (innerType instanceof ParameterizedType) {
-                        throw new IllegalStateException("Not support nested List: field " + field.getName());
-                    }
-                    Class<?> innerClass = (Class<?>) innerType;
-                    if (innerClass.isAssignableFrom(String.class)) {
-                        if (resettableInputStream == null) {
-                            throw new IllegalStateException("PropertyStream is empty");
-                        }
+                IGenericContext genericContext = Factory.getGenericContext(genericFieldType);
 
-                        List<String> result = new ArrayList<>();
-                        BufferedReader propertyIn =
-                                resettableInputStream.getBufferedReader();
-                        String line;
-                        while ((line = propertyIn.readLine()) != null) {
-                            line = line.trim();
-                            boolean matches = Pattern.matches("^" + RegexUtils.escape(fullPropertyName) + "\\[.*\\]=.*",
-                                    line);
-                            if (matches) {
-                                result.add(getLineValue(line));
-                            }
-                        }
-                        try {
-                            field.set(confInstance, result);
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        }
-                    } else {
+                if (!genericContext.isGeneric()) {
+                    throw new RuntimeException(ft("Raw List not support"));
+                }
 
-                        if (resettableInputStream == null) {
-                            throw new IllegalStateException("Property file not found in the classpath: " + DEFAULT_CONF_NAME + PROPERTIES_SUFFIX);
-                        }
+                int typeArgCount = genericContext.count();
+                if (typeArgCount > 1) {
+                    throw new RuntimeException("Property parse error");
+                }
 
-                        Map<String, List<String>> map = new LinkedHashMap<>();
-                        BufferedReader propertyIn =
-                                resettableInputStream.getBufferedReader();
-                        String line;
-                        while ((line = propertyIn.readLine()) != null) {
-                            line = line.trim();
-                            String regex = "^(" + RegexUtils.escape(fullPropertyName) + "\\[.*\\])\\.";
-                            RegexNestListPrefixContext regexNestListPrefixContext =
-                                    regexNestListPrefix(line, fullPropertyName);
-                            if (regexNestListPrefixContext == null) {
-                                continue;
-                            }
-                            String listId = regexNestListPrefixContext.getId();
-                            List<String> groupLines = map.get(listId);
-                            if (groupLines == null) {
-                                groupLines = new ArrayList<>();
-                                map.put(listId, groupLines);
-                            }
+                GenericContext firstNestedCtx = genericContext.get(0);
+                if (firstNestedCtx.isGeneric()) {
+                    throw new IllegalStateException("Not support nested List or other generic Types: field " + field.getName());
+                }
 
-                            groupLines.add(line);
+                Class<?> innerClass = firstNestedCtx.getRawType();
+                if (innerClass.isAssignableFrom(String.class)) {
+                    result = processStringField(resettableInputStream, fullPropertyName, true);
+                    ReflectUtils.setField(field, confInstance, result);
+                } else {
+                    result = processListWithNotGenericObjectField(resettableInputStream, fullPropertyName, innerClass,
+                            field, prefix);
+                    ReflectUtils.setField(field, confInstance, result);
 
-                        }
-
-                        Map<String, String> groupStringMap = new HashMap<>();
-
-
-                        map.forEach((k, v) -> {
-                            String lines = "";
-
-                            String listId = k;
-                            List<String> groupLines = v;
-                            for (String l : groupLines) {
-                                lines += l;
-                                lines += "\n";
-                            }
-                            groupStringMap.put(k, lines);
-                        });
-
-                        Set<String> groupIds = groupStringMap.keySet();
-                        List<Object> results = new ArrayList<>();
-                        for (String groupId : groupIds) {
-                            String groupStrings = groupStringMap.get(groupId);
-                            Object result = createConf(Factory.getStringResettableInputStreamFromString(groupStrings),
-                                    innerClass, true, field, prefix, true, groupId);
-                            results.add(result);
-                        }
-                        try {
-                            field.set(confInstance, results);
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        }
-
-                        //throw new IllegalStateException("Only support String List arg: field " + field.getName());
-                    }
+                    //throw new IllegalStateException("Only support String List arg: field " + field.getName());
                 }
             } else {
-                Object result = createConf(resettableInputStream, fieldType, true, field, prefix, false, null);
-                try {
-                    field.set(confInstance, result);
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                }
+                result = createConf(resettableInputStream, fieldType, true, field, prefix, false, null);
+                ReflectUtils.setField(field, confInstance, result);
             }
         }
 
