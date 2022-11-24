@@ -1,18 +1,22 @@
 package fit.wenchao;
 
 import fit.wenchao.propertyResolver.*;
-import fit.wenchao.utils.GenericContext;
-import fit.wenchao.utils.IGenericContext;
+import fit.wenchao.utils.GenericTypeContextResolver;
+import fit.wenchao.utils.IGenericTypeContextResolver;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
-import java.lang.reflect.Type;
 
 public class Factory {
+
     public static IPropertyResolver getPropertyResolver() {
-        return new PropertyResolver();
+        return new PropertyResolver(getGenericTypeContextResolver());
+    }
+
+    public static IGenericTypeContextResolver getGenericTypeContextResolver() {
+        return new GenericTypeContextResolver();
     }
 
     public static ResettableInputStream getStringResettableInputStreamFromResource(String resource) throws IOException {
@@ -34,7 +38,4 @@ public class Factory {
         return new StringResettableInputStream(new StringInputStream(src));
     }
 
-    public static IGenericContext getGenericContext(Type type){
-        return new GenericContext(type);
-    }
 }

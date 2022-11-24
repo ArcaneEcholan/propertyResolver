@@ -21,6 +21,12 @@ import static fit.wenchao.utils.StrUtils.ft;
 
 public class PropertyResolver implements IPropertyResolver {
 
+    private final IGenericTypeContextResolver genericTypeContextResolver;
+
+    public PropertyResolver(IGenericTypeContextResolver genericTypeContextResolver) {
+        this.genericTypeContextResolver = genericTypeContextResolver;
+    }
+
     @Override
     public <T> T create(Class<T> configClass) throws IOException {
         ResettableInputStream resettableInputStream = getResettableConfInput();
@@ -55,6 +61,51 @@ public class PropertyResolver implements IPropertyResolver {
 
     public ResettableInputStream getResettableConfInput() throws IOException {
         return Factory.getStringResettableInputStreamFromResource(DEFAULT_CONF_NAME + PROPERTIES_SUFFIX);
+    }
+
+
+    public Object processListWithNotGenericObjectField(ResettableInputStream resettableInputStream,
+                                                       String fullPropertyName,
+                                                       Class<?> configClass,
+                                                       Field field,
+                                                       String prefix) throws IOException {
+
+        Object result;
+        Type genericFieldType = field.getGenericType();
+
+        IGenericContext genericContext = genericTypeContextResolver.resolve(genericFieldType);
+
+        if (!genericContext.isGeneric()) {
+            throw new RuntimeException(ft("Raw List not support"));
+        }
+
+        int typeArgCount = genericContext.count();
+        if (typeArgCount > 1) {
+            throw new RuntimeException("Property parse error");
+        }
+
+        IGenericContext firstNestedCtx = genericContext.get(0);
+        if (firstNestedCtx.isGeneric()) {
+            throw new IllegalStateException("Not support nested List or other generic Types: field " + field.getName());
+        }
+
+        Class<?> innerClass = firstNestedCtx.getRawType();
+        if (innerClass.isAssignableFrom(String.class)) {
+            result = processStringField(resettableInputStream, fullPropertyName, true);
+        } else {
+            result = processNotGenericObjectNestedInListField(resettableInputStream, fullPropertyName, innerClass,
+                    field, prefix);
+            //throw new IllegalStateException("Only support String List arg: field " + field.getName());
+        }
+        return result;
+    }
+
+    public Object processNotGenericObjectField(ResettableInputStream resettableInputStream,
+                                               String fullPropertyName,
+                                               Class<?> configClass,
+                                               Field field,
+                                               String prefix) throws IOException {
+        return createConf(resettableInputStream, configClass, true, field, prefix, false, null);
     }
 
     public Object processStringField(ResettableInputStream resettableInputStream,
@@ -94,12 +145,11 @@ public class PropertyResolver implements IPropertyResolver {
         return result;
     }
 
-
-    public Object processListWithNotGenericObjectField(ResettableInputStream resettableInputStream,
-                                                       String fullPropertyName,
-                                                       Class<? extends Object> configClass,
-                                                       Field field,
-                                                       String prefix) throws IOException {
+    public Object processNotGenericObjectNestedInListField(ResettableInputStream resettableInputStream,
+                                                           String fullPropertyName,
+                                                           Class<?> configClass,
+                                                           Field field,
+                                                           String prefix) throws IOException {
         if (resettableInputStream == null) {
             throw new IllegalStateException("Property file not found in the classpath: " + DEFAULT_CONF_NAME + PROPERTIES_SUFFIX);
         }
@@ -153,6 +203,7 @@ public class PropertyResolver implements IPropertyResolver {
         return results;
     }
 
+
     public <T> T createConf(ResettableInputStream resettableInputStream,
                             Class<T> configClass,
                             boolean nested,
@@ -195,41 +246,24 @@ public class PropertyResolver implements IPropertyResolver {
             resettableInputStream.reset();
             Object result = null;
             if (fieldType.isAssignableFrom(String.class)) {
-                result = processStringField(resettableInputStream, fullPropertyName, false);
-                ReflectUtils.setField(field, confInstance, result);
+                result = processStringField(resettableInputStream,
+                        fullPropertyName,
+                        false);
             } else if (List.class.isAssignableFrom(fieldType)) {
-                Type genericFieldType = field.getGenericType();
-                IGenericContext genericContext = Factory.getGenericContext(genericFieldType);
-
-                if (!genericContext.isGeneric()) {
-                    throw new RuntimeException(ft("Raw List not support"));
-                }
-
-                int typeArgCount = genericContext.count();
-                if (typeArgCount > 1) {
-                    throw new RuntimeException("Property parse error");
-                }
-
-                GenericContext firstNestedCtx = genericContext.get(0);
-                if (firstNestedCtx.isGeneric()) {
-                    throw new IllegalStateException("Not support nested List or other generic Types: field " + field.getName());
-                }
-
-                Class<?> innerClass = firstNestedCtx.getRawType();
-                if (innerClass.isAssignableFrom(String.class)) {
-                    result = processStringField(resettableInputStream, fullPropertyName, true);
-                    ReflectUtils.setField(field, confInstance, result);
-                } else {
-                    result = processListWithNotGenericObjectField(resettableInputStream, fullPropertyName, innerClass,
-                            field, prefix);
-                    ReflectUtils.setField(field, confInstance, result);
-
-                    //throw new IllegalStateException("Only support String List arg: field " + field.getName());
-                }
+                result = processListWithNotGenericObjectField(resettableInputStream,
+                        fullPropertyName,
+                        fieldType,
+                        field,
+                        prefix);
             } else {
-                result = createConf(resettableInputStream, fieldType, true, field, prefix, false, null);
-                ReflectUtils.setField(field, confInstance, result);
+                result = processNotGenericObjectField(resettableInputStream,
+                        fullPropertyName,
+                        fieldType,
+                        field,
+                        prefix);
             }
+
+            ReflectUtils.setField(field, confInstance, result);
         }
 
         return confInstance;

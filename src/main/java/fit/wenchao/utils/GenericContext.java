@@ -3,9 +3,7 @@ package fit.wenchao.utils;
 import fit.wenchao.Factory;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -15,25 +13,27 @@ public class GenericContext implements IGenericContext {
 
     boolean isGeneric;
 
-    List<GenericContext> nestedCtx;
+    List<IGenericContext> nestedCtx;
 
     Class<?> rawType;
 
-    public GenericContext(Type genericType) {
-        this.type = genericType;
+    public GenericContext() {
+    }
 
-        if (type instanceof ParameterizedType) {
-            this.isGeneric = true;
-            rawType = (Class<?>) ((ParameterizedType) type).getRawType();
-            nestedCtx = new ArrayList<>();
-            Type[] actualTypeArguments = ((ParameterizedType) type).getActualTypeArguments();
-            for (Type actualTypeArgument : actualTypeArguments) {
-                GenericContext genericContext = new GenericContext(actualTypeArgument);
-                nestedCtx.add(genericContext);
-            }
-            return;
-        }
-        this.rawType = (Class<?>) type;
+    public void setType(Type type) {
+        this.type = type;
+    }
+
+    public void setGeneric(boolean generic) {
+        isGeneric = generic;
+    }
+
+    public void setNestedCtx(List<IGenericContext> nestedCtx) {
+        this.nestedCtx = nestedCtx;
+    }
+
+    public void setRawType(Class<?> rawType) {
+        this.rawType = rawType;
     }
 
     @Override
@@ -52,7 +52,7 @@ public class GenericContext implements IGenericContext {
     }
 
     @Override
-    public GenericContext get(int i) {
+    public IGenericContext get(int i) {
         return this.nestedCtx.get(i);
     }
 
@@ -71,7 +71,7 @@ public class GenericContext implements IGenericContext {
 
         Type genericType = listField.getGenericType();
 
-        IGenericContext genericContext = Factory.getGenericContext(genericType);
+        IGenericContext genericContext = Factory.getGenericTypeContextResolver().resolve(genericType);
 
         System.out.println(genericContext.isGeneric());
         System.out.println(genericContext.count());

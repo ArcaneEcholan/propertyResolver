@@ -9,7 +9,7 @@ public interface IGenericContext {
 
     Type getType(int i);
 
-    GenericContext get(int i);
+    IGenericContext get(int i);
 
     Class<?> getRawType();
 }
