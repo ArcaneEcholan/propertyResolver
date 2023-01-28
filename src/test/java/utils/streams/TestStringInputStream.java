@@ -1,11 +1,9 @@
 package utils.streams;
 
-import fit.wenchao.propertyResolver.ResettableFileInputStream;
-import fit.wenchao.propertyResolver.StringInputStream;
+import fit.wenchao.propertyResolver.resolver.StringInputStream;
 import org.junit.Test;
 
 import java.io.*;
-import java.net.URL;
 
 public class TestStringInputStream {
 

@@ -1,15 +1,11 @@
 package propertyResolver;
 
-import fit.wenchao.constants.CommonConstants;
-import fit.wenchao.example.TestProperty;
-import fit.wenchao.propertyResolver.PropertyResolver;
-import fit.wenchao.propertyResolver.PropertyResolvers;
-import fit.wenchao.propertyResolver.ResettableFileInputStream;
+import fit.wenchao.propertyResolver.example.TestProperty;
+import fit.wenchao.propertyResolver.resolver.PropertyResolvers;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.*;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 

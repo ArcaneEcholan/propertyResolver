@@ -1,6 +1,6 @@
 package utils.streams;
 
-import fit.wenchao.propertyResolver.ResettableFileInputStream;
+import fit.wenchao.propertyResolver.resolver.ResettableFileInputStream;
 import org.junit.Test;
 
 import java.io.*;
